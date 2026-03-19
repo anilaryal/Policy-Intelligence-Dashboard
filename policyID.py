@@ -1339,10 +1339,10 @@ st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("""
 <div style="border-top:0.5px solid rgba(26,26,24,0.12);padding:16px 0;display:flex;justify-content:space-between;align-items:center;">
   <div style="font-size:11px;color:#8a8a84;">
-    🏔 Nepal Climate Policy Intelligence Portal · Government of Nepal · Built with Streamlit + Claude AI
+    🏔 Nepal Climate Policy Intelligence Portal · Built with Streamlit + Claude AI
   </div>
   <div style="font-size:11px;color:#8a8a84;">
-    Data: Ministry of Forests and Environment · NDRRMA · NPC
+    Data: Ministry of Forests and Environment · NDRRMA · NPC · Government of Nepal 
   </div>
 </div>
 """, unsafe_allow_html=True)
