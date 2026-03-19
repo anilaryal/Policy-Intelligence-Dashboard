@@ -265,7 +265,7 @@ st.markdown(
     '<h1 style="color:white;font-size:22px;margin:0;font-family:Lora,serif;font-weight:700;">' + title_text + '</h1>'
     '<div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px;">' + subtitle_text + '</div>'
     '<div style="display:flex;gap:8px;margin-top:10px;">'
-    '<span style="background:rgba(255,255,255,0.15);color:white;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;">&#9679; LIVE</span>'
+    # '<span style="background:rgba(255,255,255,0.15);color:white;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;">&#9679; LIVE</span>'
     '<span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">' + str(_n_total) + ' documents indexed</span>'
     '<span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">AI-powered search</span>'
     '</div></div></div>',
