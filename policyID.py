@@ -1,6 +1,5 @@
 """
 Nepal Climate Policy Intelligence Portal
-Run with: streamlit run app.py
 Requires: pip install streamlit anthropic PyPDF2 plotly pandas
 """
 
@@ -396,6 +395,9 @@ with st.sidebar:
     for risk, color in [("Very High", "#c94030"), ("High", "#c47c40"), ("Moderate", "#2d7a4f")]:
         st.markdown(f'<div style="font-size:11px;display:flex;align-items:center;gap:6px;margin-bottom:4px;opacity:0.85;"><span style="width:8px;height:8px;border-radius:50%;background:{color};display:inline-block;"></span>{risk}</div>', unsafe_allow_html=True)
 
+_n_uploaded = len(st.session_state.get("uploaded_docs", []))
+_n_total    = len(DOCUMENTS) + _n_uploaded
+
 # ── Header ─────────────────────────────────────────────────────────────────
 title_text = "Nepal Climate Policy Intelligence Portal" if st.session_state.lang == "EN" else "नेपाल जलवायु नीति बौद्धिक पोर्टल"
 subtitle_text = "Centralized access to federal, provincial & local climate policies" if st.session_state.lang == "EN" else "संघीय, प्रादेशिक र स्थानीय जलवायु नीतिहरूमा केन्द्रीकृत पहुँच"
@@ -418,9 +420,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Stats row ──────────────────────────────────────────────────────────────
-_n_uploaded = len(st.session_state.get("uploaded_docs", []))
-_n_total    = len(DOCUMENTS) + _n_uploaded
-
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     # Use value as key so widget always reflects current count
@@ -1399,10 +1398,10 @@ st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("""
 <div style="border-top:0.5px solid rgba(26,26,24,0.12);padding:16px 0;display:flex;justify-content:space-between;align-items:center;">
   <div style="font-size:11px;color:#8a8a84;">
-    🏔 Nepal Climate Policy Intelligence Portal · Government of Nepal · Built with Streamlit + Claude AI
+    🏔 Nepal Climate Policy Intelligence Portal · Built with Streamlit + Claude AI + Grok AI
   </div>
   <div style="font-size:11px;color:#8a8a84;">
-    Data: Ministry of Forests and Environment · NDRRMA · NPC
+    Data: Ministry of Forests and Environment · NDRRMA · NPC · Government of Nepal 
   </div>
 </div>
 """, unsafe_allow_html=True)
