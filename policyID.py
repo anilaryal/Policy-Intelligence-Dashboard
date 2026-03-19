@@ -52,27 +52,33 @@ st.markdown("""
     border-left: 3px solid #2d6a45;
   }
 
-  /* Tabs — forest green active indicator */
+  /* Tabs — grey pill strip, forest green active */
   .stTabs [data-baseweb="tab-list"] {
-    gap: 0px;
-    background: white;
-    border-radius: 10px;
-    padding: 4px;
-    border: 0.5px solid rgba(26,26,24,0.12);
-    margin-bottom: 20px;
+    gap: 2px;
+    background: #e8e6e0;
+    border-radius: 12px;
+    padding: 5px;
+    margin-bottom: 24px;
   }
   .stTabs [data-baseweb="tab"] {
-    border-radius: 8px;
-    padding: 8px 18px;
+    border-radius: 9px;
+    padding: 8px 20px;
     font-size: 13px;
     font-weight: 500;
-    color: #4a4a46;
+    color: #5a5a56;
     background: transparent;
     border: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .stTabs [data-baseweb="tab"]:hover {
+    background: rgba(255,255,255,0.6);
+    color: #1a1a18;
   }
   .stTabs [aria-selected="true"] {
-    background: #1a4a2e !important;
-    color: white !important;
+    background: white !important;
+    color: #1a4a2e !important;
+    font-weight: 600 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.10);
   }
   .stTabs [data-baseweb="tab-highlight"] { display: none; }
   .stTabs [data-baseweb="tab-border"]    { display: none; }
@@ -218,13 +224,13 @@ with col4:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Horizontal navigation tabs ─────────────────────────────────────────────
-tab_explorer, tab_ai, tab_analytics, tab_provinces, tab_resources, tab_upload = st.tabs([
+tab_explorer, tab_analytics, tab_provinces, tab_resources, tab_upload, tab_ai = st.tabs([
     "📋 Policy Explorer",
-    "🤖 AI Assistant",
     "📊 Analytics",
     "🗺 Provinces",
     "📚 Resources",
     "📤 Upload Policy",
+    "🤖 AI Assistant",
 ])
 
 # ── Resources catalogue ────────────────────────────────────────────────────
