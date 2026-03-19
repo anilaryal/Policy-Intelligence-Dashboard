@@ -265,7 +265,7 @@ st.markdown(
     '<h1 style="color:white;font-size:22px;margin:0;font-family:Lora,serif;font-weight:700;">' + title_text + '</h1>'
     '<div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px;">' + subtitle_text + '</div>'
     '<div style="display:flex;gap:8px;margin-top:10px;">'
-    # '<span style="background:rgba(255,255,255,0.15);color:white;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;">&#9679; LIVE</span>'
+    '<span style="background:rgba(255,255,255,0.15);color:white;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;">&#9679; LIVE</span>'
     '<span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">' + str(_n_total) + ' documents indexed</span>'
     '<span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">AI-powered search</span>'
     '</div></div></div>',
@@ -273,7 +273,7 @@ st.markdown(
 )
 
 # ── Stats row ──────────────────────────────────────────────────────────────
-_all_sectors = set(s for d in DOCUMENTS + st.session_state.uploaded_docs for s in d.get("sector",[]))
+_all_sectors = set(s for d in DOCUMENTS + [d for d in st.session_state.uploaded_docs if d.get("approved", True)] for s in d.get("sector",[]))
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -362,7 +362,7 @@ def call_ai(system_prompt, messages):
     return "No AI key set. Add GROQ_API_KEY (free at console.groq.com) or ANTHROPIC_API_KEY to Streamlit Secrets."
 
 with tab_explorer:
-    all_docs = DOCUMENTS + st.session_state.uploaded_docs
+    all_docs = DOCUMENTS + [d for d in st.session_state.uploaded_docs if d.get("approved", True)]
     col_s,col_sec,col_lev,col_th = st.columns([3,1.5,1.5,1.5])
     with col_s:
         search_q = st.text_input("",placeholder="Search policies, keywords, ministries...",label_visibility="collapsed")
@@ -434,8 +434,8 @@ with tab_ai:
             del st.session_state._pending_question
         if submitted and user_input.strip():
             st.session_state.chat_history.append({"role":"user","content":user_input})
-            doc_ctx = "\n".join(f"{i+1}. {d['title']} ({d['year']}): {d['summary']}" for i,d in enumerate(DOCUMENTS+st.session_state.uploaded_docs))
-            up_ctx  = "".join(f"\n\nExtracted from {u['title']}:\n{u['extracted_text'][:3000]}" for u in st.session_state.uploaded_docs if u.get("extracted_text"))
+            doc_ctx = "\n".join(f"{i+1}. {d['title']} ({d['year']}): {d['summary']}" for i,d in enumerate(DOCUMENTS+[d for d in st.session_state.uploaded_docs if d.get("approved", True)]))
+            up_ctx  = "".join(f"\n\nExtracted from {u['title']}:\n{u['extracted_text'][:3000]}" for u in [d for d in st.session_state.uploaded_docs if d.get("approved", True)] if u.get("extracted_text"))
             sysprompt = (
                 "You are Nepal Climate Policy Intelligence Assistant.\n\n"
                 f"Policy documents:\n{doc_ctx}{up_ctx}\n\n"
@@ -466,7 +466,7 @@ with tab_ai:
 
 with tab_analytics:
     st.markdown("### 📊 Policy Analytics Dashboard")
-    all_docs = DOCUMENTS + st.session_state.uploaded_docs
+    all_docs = DOCUMENTS + [d for d in st.session_state.uploaded_docs if d.get("approved", True)]
     c1,c2 = st.columns(2)
     with c1:
         tc = {}
@@ -788,18 +788,95 @@ with tab_upload:
             st.markdown("#### Saved documents")
             for ud in st.session_state.uploaded_docs:
                 icon = "🌐" if ud.get("source_type") == "url" else "📄"
+                # Per-document approve / reject controls (visible to dev only — see below)
+                _approved = ud.get("approved", True)  # default approved
+                status_dot = (
+                    '<span style="width:7px;height:7px;border-radius:50%;background:#2d7a4f;'
+                    'display:inline-block;flex-shrink:0;margin-top:3px;" title="Approved"></span>'
+                    if _approved else
+                    '<span style="width:7px;height:7px;border-radius:50%;background:#c47c40;'
+                    'display:inline-block;flex-shrink:0;margin-top:3px;" title="Pending review"></span>'
+                )
                 st.markdown(
                     f'<div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;">' +
+                    status_dot +
                     f'<span style="font-size:13px;">{icon}</span>' +
                     f'<div><div style="font-size:12px;font-weight:500;color:#1a1a18;">{ud["short_title"]}</div>' +
                     f'<div style="font-size:10px;color:#8a8a84;">{ud["year"]} · {ud["level"]} · {ud.get("source_type","file").upper()}</div></div></div>',
                     unsafe_allow_html=True,
                 )
-            if st.button("🗑 Clear all saved documents", type="secondary", use_container_width=True):
-                st.session_state.uploaded_docs = []
-                _get_doc_store().clear()
-                save_doc_store([])
-                st.rerun()
+
+        # ── Developer admin panel ─────────────────────────────────────────
+        # Hidden behind a password — not visible to regular users.
+        # Set ADMIN_PASSWORD in Streamlit Cloud Secrets to enable.
+        _admin_pwd = (
+            st.secrets.get("ADMIN_PASSWORD", None)
+            or os.environ.get("ADMIN_PASSWORD", None)
+        )
+        if _admin_pwd:
+            with st.expander("🔧 Developer admin panel", expanded=False):
+                entered = st.text_input(
+                    "Admin password", type="password",
+                    key="admin_pwd_input",
+                    label_visibility="visible",
+                )
+                if entered == _admin_pwd:
+                    st.success("✅ Admin access granted")
+
+                    if st.session_state.uploaded_docs:
+                        st.markdown("**Review & manage uploaded documents:**")
+                        to_remove = []
+                        for idx, ud in enumerate(st.session_state.uploaded_docs):
+                            icon = "🌐" if ud.get("source_type") == "url" else "📄"
+                            ca, cb, cc = st.columns([4, 1, 1])
+                            with ca:
+                                approved = ud.get("approved", True)
+                                st.markdown(
+                                    f'{"✅" if approved else "⏳"} **{ud["short_title"]}** ' +
+                                    f'`{ud["year"]}` · {ud["level"]} · {icon}',
+                                )
+                            with cb:
+                                lbl = "Revoke" if approved else "Approve"
+                                if st.button(lbl, key=f"toggle_{idx}", use_container_width=True):
+                                    st.session_state.uploaded_docs[idx]["approved"] = not approved
+                                    _get_doc_store().clear()
+                                    _get_doc_store().extend(st.session_state.uploaded_docs)
+                                    save_doc_store(st.session_state.uploaded_docs)
+                                    st.rerun()
+                            with cc:
+                                if st.button("Delete", key=f"del_{idx}", type="secondary", use_container_width=True):
+                                    st.session_state.uploaded_docs.pop(idx)
+                                    _get_doc_store().clear()
+                                    _get_doc_store().extend(st.session_state.uploaded_docs)
+                                    save_doc_store(st.session_state.uploaded_docs)
+                                    st.rerun()
+
+                        st.markdown("---")
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("🗑 Delete ALL documents", type="secondary", use_container_width=True):
+                                st.session_state.uploaded_docs = []
+                                _get_doc_store().clear()
+                                save_doc_store([])
+                                st.rerun()
+                        with c2:
+                            st.download_button(
+                                "⬇ Export as JSON",
+                                data=json.dumps(
+                                    [
+                                        {k: v for k, v in d.items() if k != "extracted_text"}
+                                        for d in st.session_state.uploaded_docs
+                                    ],
+                                    ensure_ascii=False, indent=2
+                                ),
+                                file_name="nepal_policy_uploads.json",
+                                mime="application/json",
+                                use_container_width=True,
+                            )
+                    else:
+                        st.info("No user-uploaded documents in the database.")
+                elif entered:
+                    st.error("Incorrect password.")
 
 # ── Footer ─────────────────────────────────────────────────────────────────
 st.markdown("<br><br>",unsafe_allow_html=True)
