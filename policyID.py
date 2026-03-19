@@ -705,117 +705,294 @@ elif "Analytics" in page:
     st.markdown("### 📊 Policy Analytics Dashboard")
 
     all_docs = DOCUMENTS + st.session_state.uploaded_docs
+
+    # ── Row 1: Themes (horizontal bar) + Sectors (donut with legend) ─────────
     col1, col2 = st.columns(2)
 
     with col1:
-        # Theme distribution
         theme_counts = {}
         for d in all_docs:
             for t in d.get("themes", []):
                 theme_counts[t] = theme_counts.get(t, 0) + 1
-        df_themes = pd.DataFrame(list(theme_counts.items()), columns=["Theme", "Count"]).sort_values("Count", ascending=True)
-        fig = go.Figure(go.Bar(
-            x=df_themes["Count"], y=df_themes["Theme"], orientation="h",
-            marker_color=["#2d6a45", "#2e72b0", "#7a4a1e", "#c47c40", "#8a5aa0"][:len(df_themes)],
-            text=df_themes["Count"], textposition="outside",
+        df_themes = pd.DataFrame(
+            list(theme_counts.items()), columns=["Theme", "Count"]
+        ).sort_values("Count", ascending=True)
+
+        theme_colors = ["#8a5aa0", "#c47c40", "#7a4a1e", "#2e72b0", "#2d6a45"]
+        fig1 = go.Figure(go.Bar(
+            x=df_themes["Count"],
+            y=df_themes["Theme"],
+            orientation="h",
+            marker_color=theme_colors[:len(df_themes)],
+            text=df_themes["Count"],
+            textposition="outside",
+            textfont=dict(size=12, color="#1a1a18"),
+            cliponaxis=False,
         ))
-        fig.update_layout(
-            title="Policy themes distribution", title_font_size=13,
+        fig1.update_layout(
+            title=dict(text="Policy themes distribution", font=dict(size=13), x=0),
             paper_bgcolor="white", plot_bgcolor="white",
-            margin=dict(l=0, r=30, t=40, b=0), height=280,
-            xaxis=dict(showgrid=False, zeroline=False, visible=False),
-            yaxis=dict(tickfont=dict(size=11)),
+            height=300,
+            margin=dict(l=10, r=50, t=45, b=10),
+            xaxis=dict(showgrid=False, zeroline=False, visible=False,
+                       range=[0, df_themes["Count"].max() * 1.35]),
+            yaxis=dict(tickfont=dict(size=12), automargin=True),
             font=dict(family="Inter, sans-serif"),
+            bargap=0.35,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        # Sector coverage
         sector_counts = {}
         for d in all_docs:
             for s in d.get("sector", []):
                 sector_counts[s] = sector_counts.get(s, 0) + 1
-        df_sec = pd.DataFrame(list(sector_counts.items()), columns=["Sector", "Count"]).sort_values("Count", ascending=False)
-        colors = px.colors.qualitative.Set2
-        fig2 = px.pie(df_sec, values="Count", names="Sector",
-                      title="Sector coverage",
-                      color_discrete_sequence=colors)
-        fig2.update_traces(textposition="inside", textinfo="percent+label", textfont_size=11)
+        df_sec = pd.DataFrame(
+            list(sector_counts.items()), columns=["Sector", "Count"]
+        ).sort_values("Count", ascending=False)
+
+        sec_colors = ["#2d6a45","#2e72b0","#7a4a1e","#c47c40","#8a5aa0",
+                      "#1e6a6a","#b56a00","#c94030"][:len(df_sec)]
+        fig2 = go.Figure(go.Pie(
+            labels=df_sec["Sector"],
+            values=df_sec["Count"],
+            hole=0.52,
+            marker=dict(colors=sec_colors, line=dict(color="white", width=2)),
+            textinfo="percent",
+            textposition="inside",
+            textfont=dict(size=11, color="white"),
+            insidetextorientation="radial",
+            hovertemplate="<b>%{label}</b><br>%{value} documents (%{percent})<extra></extra>",
+        ))
         fig2.update_layout(
-            paper_bgcolor="white", height=280, margin=dict(l=0, r=0, t=40, b=0),
+            title=dict(text="Sector coverage", font=dict(size=13), x=0),
+            paper_bgcolor="white",
+            height=300,
+            margin=dict(l=0, r=0, t=45, b=10),
             font=dict(family="Inter, sans-serif", size=11),
-            showlegend=False, title_font_size=13,
+            showlegend=True,
+            legend=dict(
+                orientation="v",
+                x=1.02, y=0.95,
+                xanchor="left",
+                font=dict(size=10),
+                bgcolor="rgba(0,0,0,0)",
+                itemsizing="constant",
+            ),
         )
         st.plotly_chart(fig2, use_container_width=True)
 
+    # ── Row 2: Timeline (vertical list) + Language bar ────────────────────────
     col3, col4 = st.columns(2)
 
     with col3:
-        # Timeline
-        st.markdown('<div class="section-label">Policy timeline (1993–2026)</div>', unsafe_allow_html=True)
+        # ── Staggered timeline — lane-based algorithm prevents all label overlap
         sorted_docs = sorted(all_docs, key=lambda d: d["year"])
-        df_time = pd.DataFrame([{"Year": d["year"], "Policy": d["short_title"], "Level": d["level"], "Status": d["status"]} for d in sorted_docs])
+        status_colors_map = {
+            "Approved":    "#2d6a45",
+            "Active":      "#2e72b0",
+            "Foundational":"#7a4a1e",
+            "Draft":       "#c47c40",
+        }
 
-        fig3 = px.scatter(df_time, x="Year", y=[0]*len(df_time), text="Policy",
-                          size=[15]*len(df_time), color="Status",
-                          color_discrete_map={"Approved": "#2d6a45", "Active": "#2e72b0",
-                                              "Foundational": "#7a4a1e"},
-                          title="Policy chronology")
-        fig3.update_traces(textposition="top center", textfont_size=9, mode="markers+text")
+        # Normalise year → x in [0, 100]
+        yr_min, yr_max = 1990, 2030
+        def xpos(yr): return (yr - yr_min) / (yr_max - yr_min) * 100
+
+        # Lane assignment: greedy left-to-right, avoids any x-overlap
+        LABEL_W  = 20          # minimum gap between label centres (x-units)
+        N_LANES  = 5
+        lane_tip = [-999] * N_LANES   # rightmost x used per lane
+        doc_lanes = []
+        for d in sorted_docs:
+            x = xpos(d["year"])
+            chosen = 0
+            for li in range(N_LANES):
+                if x - lane_tip[li] >= LABEL_W:
+                    chosen = li
+                    break
+            else:
+                chosen = min(range(N_LANES), key=lambda i: lane_tip[i])
+            lane_tip[chosen] = x
+            doc_lanes.append(chosen)
+
+        # Y offsets per lane: alternate above / below the spine
+        lane_y = [0, 0.30, -0.30, 0.58, -0.58]
+        SPINE_Y = -0.10
+
+        fig3 = go.Figure()
+
+        # Spine
+        fig3.add_shape(type="line",
+            x0=0, x1=100, y0=SPINE_Y, y1=SPINE_Y,
+            line=dict(color="#d0cec8", width=2))
+
+        # Year axis ticks
+        for yr in [1993, 2000, 2005, 2010, 2015, 2019, 2021, 2024, 2026]:
+            xp = xpos(yr)
+            if 0 <= xp <= 100:
+                fig3.add_shape(type="line",
+                    x0=xp, x1=xp,
+                    y0=SPINE_Y - 0.04, y1=SPINE_Y + 0.04,
+                    line=dict(color="#c0beb8", width=1))
+                fig3.add_annotation(
+                    x=xp, y=SPINE_Y - 0.13,
+                    text=str(yr), showarrow=False,
+                    font=dict(size=8, color="#8a8a84"),
+                    yanchor="top", xanchor="center")
+
+        # Dots + stems + label boxes
+        for i, d in enumerate(sorted_docs):
+            x      = xpos(d["year"])
+            lane   = doc_lanes[i]
+            y_off  = lane_y[lane]
+            color  = status_colors_map.get(d["status"], "#8a8a84")
+            label  = (d["short_title"][:30] + "…"
+                      if len(d["short_title"]) > 30 else d["short_title"])
+
+            y_dot   = SPINE_Y
+            y_label = SPINE_Y + y_off
+
+            # Dot on spine
+            fig3.add_trace(go.Scatter(
+                x=[x], y=[y_dot],
+                mode="markers",
+                marker=dict(size=10, color=color,
+                            line=dict(color="white", width=2)),
+                hovertemplate=(
+                    f"<b>{d['short_title']}</b><br>"
+                    f"{d['year']} · {d['status']}<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+
+            # Stem line from dot toward label
+            if abs(y_off) > 0.01:
+                sign = 1 if y_off > 0 else -1
+                fig3.add_shape(type="line",
+                    x0=x, x1=x,
+                    y0=y_dot + sign * 0.05,
+                    y1=y_label - sign * 0.09,
+                    line=dict(color=color, width=1, dash="dot"))
+
+            # Label annotation with white background box
+            fig3.add_annotation(
+                x=x, y=y_label,
+                text=f"<b>{d['year']}</b>  {label}",
+                showarrow=False,
+                font=dict(size=9, color="#1a1a18"),
+                bgcolor="white",
+                bordercolor=color,
+                borderwidth=1.2,
+                borderpad=4,
+                xanchor="center",
+                yanchor="middle",
+                opacity=1.0,
+            )
+
+        n_used   = max(doc_lanes) + 1
+        y_spread = lane_y[min(n_used - 1, N_LANES - 1)]
+        y_top    = SPINE_Y + abs(y_spread) + 0.45
+        y_bot    = SPINE_Y - abs(y_spread) - 0.35
+
         fig3.update_layout(
-            paper_bgcolor="white", plot_bgcolor="white", height=240,
-            margin=dict(l=0, r=0, t=40, b=0), showlegend=True,
-            yaxis=dict(visible=False), xaxis=dict(tickfont=dict(size=10)),
-            font=dict(family="Inter, sans-serif"), title_font_size=13,
-            legend=dict(font=dict(size=10), orientation="h", y=-0.1),
+            title=dict(text="Policy chronology", font=dict(size=13), x=0),
+            paper_bgcolor="white", plot_bgcolor="white",
+            height=340,
+            margin=dict(l=10, r=10, t=45, b=10),
+            xaxis=dict(range=[-2, 102], visible=False,
+                       showgrid=False, zeroline=False),
+            yaxis=dict(range=[y_bot, y_top], visible=False,
+                       showgrid=False, zeroline=False),
+            font=dict(family="Inter, sans-serif"),
+            showlegend=False,
         )
         st.plotly_chart(fig3, use_container_width=True)
 
+        # Status legend
+        seen = {}
+        for d in sorted_docs:
+            seen[d["status"]] = status_colors_map.get(d["status"], "#8a8a84")
+        legend_html = " ".join(
+            f'<span style="display:inline-flex;align-items:center;gap:5px;'
+            f'margin-right:14px;font-size:11px;color:#4a4a46;">'
+            f'<span style="width:10px;height:10px;border-radius:50%;'
+            f'background:{c};display:inline-block;flex-shrink:0;"></span>{s}</span>'
+            for s, c in seen.items()
+        )
+        st.markdown(legend_html, unsafe_allow_html=True)
     with col4:
-        # Language distribution
         lang_counts = {}
         for d in all_docs:
-            l = d.get("language", "Unknown")
-            lang_counts[l] = lang_counts.get(l, 0) + 1
+            lang_counts[d.get("language", "Unknown")] = lang_counts.get(d.get("language", "Unknown"), 0) + 1
         df_lang = pd.DataFrame(list(lang_counts.items()), columns=["Language", "Count"])
-        fig4 = px.bar(df_lang, x="Language", y="Count",
-                      color="Language",
-                      color_discrete_map={"English": "#2e72b0", "Nepali": "#c47c40", "English/Nepali": "#2d6a45"},
-                      title="Language distribution", text="Count")
-        fig4.update_traces(textposition="outside")
+        lang_color_map = {
+            "English": "#2e72b0", "Nepali": "#c47c40",
+            "English/Nepali": "#2d6a45", "Unknown": "#8a8a84",
+        }
+        fig4 = go.Figure(go.Bar(
+            x=df_lang["Language"],
+            y=df_lang["Count"],
+            marker_color=[lang_color_map.get(l, "#8a8a84") for l in df_lang["Language"]],
+            text=df_lang["Count"],
+            textposition="outside",
+            textfont=dict(size=13, color="#1a1a18"),
+            cliponaxis=False,
+            width=0.45,
+        ))
         fig4.update_layout(
-            paper_bgcolor="white", plot_bgcolor="white", height=240,
-            margin=dict(l=0, r=0, t=40, b=30), showlegend=False,
-            yaxis=dict(showgrid=False, visible=False),
-            xaxis=dict(tickfont=dict(size=11)),
-            font=dict(family="Inter, sans-serif"), title_font_size=13,
+            title=dict(text="Language distribution", font=dict(size=13), x=0),
+            paper_bgcolor="white", plot_bgcolor="white",
+            height=300,
+            margin=dict(l=10, r=20, t=45, b=10),
+            yaxis=dict(showgrid=False, visible=False,
+                       range=[0, df_lang["Count"].max() * 1.4]),
+            xaxis=dict(
+                tickfont=dict(size=11),
+                automargin=True,
+            ),
+            font=dict(family="Inter, sans-serif"),
+            showlegend=False,
         )
         st.plotly_chart(fig4, use_container_width=True)
 
-    # Province risk map
+    # ── Province risk bar ─────────────────────────────────────────────────────
     st.markdown("### Province climate risk profile")
     df_prov = pd.DataFrame(PROVINCES)
-    df_prov["risk_color"] = df_prov["risk"].map(
-        {"Very High": "#c94030", "High": "#c47c40", "Moderate": "#2d7a4f"})
+    risk_color_map = {"Very High": "#c94030", "High": "#c47c40", "Moderate": "#2d7a4f"}
 
-    fig5 = go.Figure()
-    for _, row in df_prov.iterrows():
-        fig5.add_trace(go.Bar(
-            name=row["name"], x=[row["name"]], y=[row["risk_score"]],
-            marker_color=row["risk_color"], text=row["risk"],
-            textposition="outside", width=0.5,
-        ))
+    fig5 = go.Figure(go.Bar(
+        x=df_prov["name"],
+        y=df_prov["risk_score"],
+        marker_color=[risk_color_map.get(r, "#8a8a84") for r in df_prov["risk"]],
+        text=df_prov["risk"],
+        textposition="outside",
+        textfont=dict(size=11, color="#1a1a18"),
+        cliponaxis=False,
+        width=0.55,
+        hovertemplate="<b>%{x}</b><br>Risk: %{text}<extra></extra>",
+    ))
     fig5.update_layout(
-        title="Provincial climate risk levels", barmode="group",
-        paper_bgcolor="white", plot_bgcolor="white", height=280,
-        margin=dict(l=0, r=0, t=40, b=0), showlegend=False,
-        yaxis=dict(visible=False, range=[0, 7]),
-        xaxis=dict(tickfont=dict(size=11)),
-        font=dict(family="Inter, sans-serif"), title_font_size=13,
+        title=dict(text="Provincial climate risk levels", font=dict(size=13), x=0),
+        paper_bgcolor="white", plot_bgcolor="white",
+        height=300,
+        margin=dict(l=10, r=20, t=45, b=10),
+        yaxis=dict(visible=False, range=[0, df_prov["risk_score"].max() * 1.5]),
+        xaxis=dict(tickfont=dict(size=11), automargin=True),
+        font=dict(family="Inter, sans-serif"),
+        showlegend=False,
     )
+    # Risk legend
     st.plotly_chart(fig5, use_container_width=True)
+    risk_legend = " ".join(
+        f'<span style="display:inline-flex;align-items:center;gap:4px;margin-right:16px;font-size:11px;color:#4a4a46;">'
+        f'<span style="width:10px;height:10px;border-radius:2px;background:{c};display:inline-block;"></span>{r}</span>'
+        for r, c in risk_color_map.items()
+    )
+    st.markdown(risk_legend, unsafe_allow_html=True)
 
-    # Policy gaps table
+    # ── Policy gaps ───────────────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("### 🔍 Policy gap analysis")
     for g in POLICY_GAPS:
         sev_color = {"high": "#c94030", "medium": "#c47c40", "low": "#8a8a84"}[g["severity"]]
