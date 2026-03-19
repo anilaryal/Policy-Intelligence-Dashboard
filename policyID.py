@@ -400,6 +400,55 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+
+# ── call_ai: Groq (free) first, Anthropic fallback ─────────────────────────
+def call_ai(system_prompt, messages):
+    groq_key = st.secrets.get('GROQ_API_KEY', '') or os.environ.get('GROQ_API_KEY', '')
+    ant_key  = st.secrets.get('ANTHROPIC_API_KEY', '') or os.environ.get('ANTHROPIC_API_KEY', '')
+    if groq_key:
+        try:
+            r = requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': 'Bearer ' + groq_key,
+                         'Content-Type': 'application/json'},
+                json={'model': 'llama-3.3-70b-versatile',
+                      'messages': [{'role': 'system', 'content': system_prompt}] + messages,
+                      'max_tokens': 1000, 'temperature': 0.4},
+                timeout=30)
+            r.raise_for_status()
+            return r.json()['choices'][0]['message']['content']
+        except Exception as exc:
+            return '⚠️ Groq error: ' + str(exc)
+    if ant_key:
+        try:
+            if ANTHROPIC_SDK:
+                c = anthropic.Anthropic(api_key=ant_key)
+                res = c.messages.create(model='claude-sonnet-4-20250514',
+                                        max_tokens=1000, system=system_prompt,
+                                        messages=messages)
+                return res.content[0].text
+            r = requests.post(
+                'https://api.anthropic.com/v1/messages',
+                headers={'x-api-key': ant_key, 'anthropic-version': '2023-06-01',
+                         'content-type': 'application/json'},
+                json={'model': 'claude-sonnet-4-20250514', 'max_tokens': 1000,
+                      'system': system_prompt, 'messages': messages},
+                timeout=30)
+            r.raise_for_status()
+            return r.json()['content'][0]['text']
+        except Exception as exc:
+            return '⚠️ Anthropic error: ' + str(exc)
+    return (
+        '⚠️ **No AI key set.**\n\n'
+        'Add to **Streamlit Cloud → App Settings → Secrets**:\n\n'
+        '**Option A — Groq (FREE, no credit card):**\n'
+        '```\nGROQ_API_KEY = "gsk_..."\n```\n'
+        'Get free key at https://console.groq.com\n\n'
+        '**Option B — Anthropic:**\n'
+        '```\nANTHROPIC_API_KEY = "sk-ant-..."\n```'
+    )
+
+
 # ── Stats row ──────────────────────────────────────────────────────────────
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -572,52 +621,8 @@ Instructions:
             messages = [{"role": m["role"], "content": m["content"]}
                         for m in st.session_state.chat_history]
 
-            with st.spinner("Analyzing policies…"):
-                try:
-                    api_key = (
-                        st.secrets.get("ANTHROPIC_API_KEY", None)
-                        or os.environ.get("ANTHROPIC_API_KEY", None)
-                    )
-                    if not api_key:
-                        raise ValueError("ANTHROPIC_API_KEY not found.")
-
-                    if ANTHROPIC_SDK:
-                        client = anthropic.Anthropic(api_key=api_key)
-                        response = client.messages.create(
-                            model="claude-sonnet-4-20250514",
-                            max_tokens=1000,
-                            system=system_prompt,
-                            messages=messages,
-                        )
-                        reply = response.content[0].text
-                    else:
-                        resp = requests.post(
-                            "https://api.anthropic.com/v1/messages",
-                            headers={
-                                "x-api-key": api_key,
-                                "anthropic-version": "2023-06-01",
-                                "content-type": "application/json",
-                            },
-                            json={
-                                "model": "claude-sonnet-4-20250514",
-                                "max_tokens": 1000,
-                                "system": system_prompt,
-                                "messages": messages,
-                            },
-                            timeout=30,
-                        )
-                        resp.raise_for_status()
-                        reply = resp.json()["content"][0]["text"]
-
-                except ValueError as e:
-                    reply = (
-                        "⚠️ **API key not configured.**\n\n"
-                        "On Streamlit Cloud, add your key in **App Settings → Secrets**:\n"
-                        "```\nANTHROPIC_API_KEY = \"sk-ant-...\"\n```\n"
-                        "Locally, run: `export ANTHROPIC_API_KEY=sk-ant-...`"
-                    )
-                except Exception as e:
-                    reply = f"⚠️ Could not reach AI service: {e}"
+            with st.spinner('Analyzing policies…'):
+                reply = call_ai(system_prompt, messages)
 
             st.session_state.chat_history.append({"role": "assistant", "content": reply})
             st.rerun()
@@ -646,6 +651,15 @@ Instructions:
                 st.markdown(f"✅ {ud['short_title']}")
 
         st.info("💡 Upload more documents in the 'Upload Policy' tab to expand the AI's knowledge base.")
+
+        _gk = st.secrets.get('GROQ_API_KEY', '') or os.environ.get('GROQ_API_KEY', '')
+        _ak = st.secrets.get('ANTHROPIC_API_KEY', '') or os.environ.get('ANTHROPIC_API_KEY', '')
+        if _gk:
+            st.success('⚡ AI: Groq (free tier) · llama-3.3-70b')
+        elif _ak:
+            st.info('🤖 AI: Anthropic Claude')
+        else:
+            st.warning('⚠️ No key set — add GROQ_API_KEY to Secrets (free!)')
 
         st.markdown("### 🌐 Bilingual support")
         st.markdown("Ask in **English** or **नेपाली**. The assistant responds in the same language.")
