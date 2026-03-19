@@ -52,12 +52,33 @@ st.markdown("""
     background: #1a4a2e !important;
     color: white;
   }
-  section[data-testid="stSidebar"] * { color: white !important; }
+
+  /* Target text elements only — do NOT use * which hides the collapse arrow */
+  section[data-testid="stSidebar"] p,
+  section[data-testid="stSidebar"] span,
+  section[data-testid="stSidebar"] label,
+  section[data-testid="stSidebar"] div,
+  section[data-testid="stSidebar"] a,
+  section[data-testid="stSidebar"] li { color: white !important; }
+
+  /* Selectbox inside sidebar */
   section[data-testid="stSidebar"] .stSelectbox > div > div {
     background: rgba(255,255,255,0.1) !important;
     border-color: rgba(255,255,255,0.2) !important;
     color: white !important;
   }
+
+  /* Keep the collapse/expand toggle button visible */
+  [data-testid="collapsedControl"],
+  [data-testid="collapsedControl"] svg,
+  [data-testid="collapsedControl"] path,
+  button[kind="header"],
+  button[kind="header"] svg,
+  button[kind="header"] path { color: inherit !important; fill: inherit !important; }
+
+  /* Sidebar collapse arrow — ensure icon is always visible */
+  section[data-testid="stSidebar"] + div button,
+  section[data-testid="stSidebar"] + div svg { color: #1a4a2e !important; }
 
   /* Metric cards */
   [data-testid="metric-container"] {
@@ -364,10 +385,10 @@ with st.sidebar:
 
     # Quick stats in sidebar
     st.markdown('<div style="font-size:11px;opacity:0.7;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Database status</div>', unsafe_allow_html=True)
-    total = len(DOCUMENTS) + len(st.session_state.uploaded_docs)
+    _sidebar_total = len(DOCUMENTS) + len(st.session_state.get("uploaded_docs", []))
     st.markdown(f"""
     <div style="font-size:12px;line-height:2;opacity:0.85;">
-      📄 {total} documents indexed<br>
+      📄 {_sidebar_total} documents indexed<br>
       🏛 6 Federal policies<br>
       🌐 {len([d for d in DOCUMENTS if d['language']=='English'])} in English<br>
       📝 1 in नेपाली<br>
@@ -396,7 +417,7 @@ st.markdown(f"""
     <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-top:4px;">{subtitle_text}</div>
     <div style="display:flex; gap:8px; margin-top:10px;">
       <span style="background:rgba(255,255,255,0.15);color:white;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;">● LIVE</span>
-      <span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">{len(DOCUMENTS)+len(st.session_state.uploaded_docs)} documents indexed</span>
+      <span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">{len(DOCUMENTS)+len(st.session_state.get("uploaded_docs",[]))} documents indexed</span>
       <span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">AI-powered search</span>
     </div>
   </div>
@@ -404,11 +425,22 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Stats row ──────────────────────────────────────────────────────────────
+_n_uploaded = len(st.session_state.get("uploaded_docs", []))
+_n_total    = len(DOCUMENTS) + _n_uploaded
+
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Total Documents", len(DOCUMENTS) + len(st.session_state.uploaded_docs), help="Uploaded policy documents")
+    st.metric(
+        "Total Documents",
+        _n_total,
+        delta=f"+{_n_uploaded} uploaded" if _n_uploaded > 0 else None,
+        help="Pre-loaded + user-uploaded policy documents",
+    )
 with col2:
-    st.metric("Sectors Covered", "8", help="Cross-cutting sectors")
+    # Recalculate sectors dynamically across all docs
+    _all_sectors = set(s for d in DOCUMENTS + st.session_state.get("uploaded_docs", [])
+                       for s in d.get("sector", []))
+    st.metric("Sectors Covered", len(_all_sectors), help="Unique sectors across all documents")
 with col3:
     st.metric("Federal Policies", "6", help="National-level policies")
 with col4:
@@ -1368,7 +1400,7 @@ st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("""
 <div style="border-top:0.5px solid rgba(26,26,24,0.12);padding:16px 0;display:flex;justify-content:space-between;align-items:center;">
   <div style="font-size:11px;color:#8a8a84;">
-    🏔 Nepal Climate Policy Intelligence Portal · Government of Nepal · Built with Streamlit + Claude AI + Grok AI
+    🏔 Nepal Climate Policy Intelligence Portal · Government of Nepal · Built with Streamlit + Claude AI
   </div>
   <div style="font-size:11px;color:#8a8a84;">
     Data: Ministry of Forests and Environment · NDRRMA · NPC
