@@ -1,6 +1,5 @@
 """
 Nepal Climate Policy Intelligence Portal
-Run with: streamlit run app.py
 Requires: pip install streamlit anthropic PyPDF2 plotly pandas
 """
 
@@ -302,6 +301,10 @@ if "selected_doc" not in st.session_state:
     st.session_state.selected_doc = None
 if "lang" not in st.session_state:
     st.session_state.lang = "EN"
+if "upload_form_key" not in st.session_state:
+    st.session_state.upload_form_key = 0
+if "last_upload_title" not in st.session_state:
+    st.session_state.last_upload_title = ""
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 def extract_pdf_text(file_bytes: bytes, max_chars: int = 8000) -> str:
@@ -1244,33 +1247,57 @@ elif "Upload Policy" in page:
     st.markdown("### 📤 Upload Policy Document")
     st.markdown("Add new policy documents to expand the database and AI knowledge base. Supports PDF, Word, and text files.")
 
+    # Show success banner ABOVE the form (persists for one render after reset)
+    if st.session_state.last_upload_title:
+        st.success(
+            f"✅ **'{st.session_state.last_upload_title}'** added successfully! "
+            f"The AI Assistant now has access to this document."
+        )
+        st.balloons()
+        st.session_state.last_upload_title = ""   # clear banner after showing once
+
     col_form, col_info = st.columns([2, 1])
 
     with col_form:
-        with st.form("upload_form"):
+        # Changing the form key forces Streamlit to re-render a blank form
+        form_key = f"upload_form_{st.session_state.upload_form_key}"
+
+        with st.form(form_key, clear_on_submit=False):
             st.markdown("**Document details**")
-            doc_title = st.text_input("Full title *", placeholder="e.g. Karnali Province Climate Change Adaptation Plan 2023")
+            doc_title    = st.text_input("Full title *",
+                               placeholder="e.g. Karnali Province Climate Change Adaptation Plan 2023")
             col_y, col_l, col_s = st.columns(3)
             with col_y:
-                doc_year = st.number_input("Year *", min_value=1990, max_value=2030, value=2023)
+                doc_year   = st.number_input("Year *", min_value=1990, max_value=2030, value=2023)
             with col_l:
-                doc_level = st.selectbox("Level *", ["Federal", "Provincial", "Local"])
+                doc_level  = st.selectbox("Level *", ["Federal", "Provincial", "Local"])
             with col_s:
                 doc_status = st.selectbox("Status", ["Active", "Approved", "Draft", "Foundational"])
 
-            doc_ministry = st.text_input("Ministry / Author", placeholder="e.g. Ministry of Forests and Environment")
-            doc_sectors = st.multiselect("Sectors", ["Climate Change", "Water", "Agriculture", "Energy", "Disaster Risk", "Health", "Environment", "Finance", "Forests", "Urban"])
-            doc_themes = st.multiselect("Themes", ["Adaptation", "Mitigation", "Governance", "Finance", "Gender & Inclusion", "Biodiversity"])
-            doc_language = st.selectbox("Language", ["English", "Nepali", "English/Nepali"])
-            doc_summary = st.text_area("Summary", placeholder="Brief description of the policy document…", height=100)
-            doc_keywords = st.text_input("Keywords (comma-separated)", placeholder="e.g. GLOF, adaptation, water, floods")
-            uploaded_file = st.file_uploader("Upload document (PDF / TXT)", type=["pdf", "txt"])
+            doc_ministry  = st.text_input("Ministry / Author",
+                               placeholder="e.g. Ministry of Forests and Environment")
+            doc_sectors   = st.multiselect("Sectors",
+                               ["Climate Change", "Water", "Agriculture", "Energy",
+                                "Disaster Risk", "Health", "Environment", "Finance",
+                                "Forests", "Urban"])
+            doc_themes    = st.multiselect("Themes",
+                               ["Adaptation", "Mitigation", "Governance", "Finance",
+                                "Gender & Inclusion", "Biodiversity"])
+            doc_language  = st.selectbox("Language", ["English", "Nepali", "English/Nepali"])
+            doc_summary   = st.text_area("Summary",
+                               placeholder="Brief description of the policy document…",
+                               height=100)
+            doc_keywords  = st.text_input("Keywords (comma-separated)",
+                               placeholder="e.g. GLOF, adaptation, water, floods")
+            uploaded_file = st.file_uploader("Upload document (PDF / TXT)",
+                               type=["pdf", "txt"])
 
-            submitted = st.form_submit_button("➕ Add to database", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("➕ Add to database",
+                            type="primary", use_container_width=True)
 
         if submitted:
-            if not doc_title or not doc_sectors:
-                st.error("Please fill in at least the title and sectors.")
+            if not doc_title.strip() or not doc_sectors:
+                st.error("⚠️ Please fill in at least the **title** and at least one **sector**.")
             else:
                 extracted = ""
                 if uploaded_file:
@@ -1281,25 +1308,27 @@ elif "Upload Policy" in page:
                         extracted = file_bytes.decode("utf-8", errors="replace")[:8000]
 
                 new_doc = {
-                    "id": f"user-{len(st.session_state.uploaded_docs)+1}",
-                    "title": doc_title,
-                    "short_title": doc_title[:50] + ("…" if len(doc_title) > 50 else ""),
-                    "year": int(doc_year),
-                    "level": doc_level,
-                    "sector": doc_sectors,
-                    "ministry": doc_ministry or "Not specified",
-                    "language": doc_language,
-                    "keywords": [k.strip() for k in doc_keywords.split(",") if k.strip()],
-                    "filename": uploaded_file.name if uploaded_file else "manual entry",
-                    "summary": doc_summary or "No summary provided.",
-                    "themes": doc_themes,
-                    "status": doc_status,
-                    "highlights": [],
+                    "id":           f"user-{len(st.session_state.uploaded_docs) + 1}",
+                    "title":        doc_title.strip(),
+                    "short_title":  doc_title.strip()[:50] + ("…" if len(doc_title.strip()) > 50 else ""),
+                    "year":         int(doc_year),
+                    "level":        doc_level,
+                    "sector":       doc_sectors,
+                    "ministry":     doc_ministry.strip() or "Not specified",
+                    "language":     doc_language,
+                    "keywords":     [k.strip() for k in doc_keywords.split(",") if k.strip()],
+                    "filename":     uploaded_file.name if uploaded_file else "manual entry",
+                    "summary":      doc_summary.strip() or "No summary provided.",
+                    "themes":       doc_themes,
+                    "status":       doc_status,
+                    "highlights":   [],
                     "extracted_text": extracted,
                 }
                 st.session_state.uploaded_docs.append(new_doc)
-                st.success(f"✅ '{doc_title}' added successfully! The AI Assistant now has access to this document.")
-                st.balloons()
+                # Store title for success banner, bump key to reset the form
+                st.session_state.last_upload_title = new_doc["title"]
+                st.session_state.upload_form_key  += 1
+                st.rerun()
 
     with col_info:
         st.markdown("#### Current database")
@@ -1339,10 +1368,10 @@ st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("""
 <div style="border-top:0.5px solid rgba(26,26,24,0.12);padding:16px 0;display:flex;justify-content:space-between;align-items:center;">
   <div style="font-size:11px;color:#8a8a84;">
-    🏔 Nepal Climate Policy Intelligence Portal · Built with Streamlit + Claude AI
+    🏔 Nepal Climate Policy Intelligence Portal · Government of Nepal · Built with Streamlit + Claude AI + Grok AI
   </div>
   <div style="font-size:11px;color:#8a8a84;">
-    Data: Ministry of Forests and Environment · NDRRMA · NPC · Government of Nepal 
+    Data: Ministry of Forests and Environment · NDRRMA · NPC
   </div>
 </div>
 """, unsafe_allow_html=True)
