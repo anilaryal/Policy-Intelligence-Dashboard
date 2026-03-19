@@ -346,7 +346,7 @@ with st.sidebar:
     # Navigation
     page = st.radio(
         "Navigate",
-        ["📋 Policy Explorer", "🤖 AI Assistant", "📊 Analytics", "🗺 Provinces", "📤 Upload Policy"],
+        ["📋 Policy Explorer", "🤖 AI Assistant", "📊 Analytics", "🗺 Provinces", "📚 Resources", "📤 Upload Policy"],
         label_visibility="collapsed",
     )
 
@@ -400,6 +400,54 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# ── Stats row ──────────────────────────────────────────────────────────────
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Total Documents", len(DOCUMENTS) + len(st.session_state.uploaded_docs), help="Uploaded policy documents")
+with col2:
+    st.metric("Sectors Covered", "8", help="Cross-cutting sectors")
+with col3:
+    st.metric("Federal Policies", "6", help="National-level policies")
+with col4:
+    st.metric("Year Span", "1993–2026", help="Temporal coverage")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+
+# ── Resources catalogue ───────────────────────────────────────────────────
+RESOURCES = [
+    {"category":"Uploaded & Indexed","id":"r01","title":"National Framework on Climate Change Induced Loss and Damage","year":2021,"type":"Policy Framework","author":"Ministry of Forests and Environment (MoFE)","language":"English","url":"https://mofe.gov.np","description":"Defines Nepal's L&D assessment methodology covering economic and non-economic losses, GLOF risks, insurance mechanisms, and displacement. 10-step assessment methodology proposed.","tags":["L&D","GLOF","Adaptation","Floods"],"source":"uploaded"},
+    {"category":"Uploaded & Indexed","id":"r02","title":"Climate Resilient WASH in Nepal: Policy Alignment, Local Practices and Service Provider Readiness","year":2026,"type":"Research Report","author":"GSAC / Multiple Ministries","language":"English","url":"https://mofe.gov.np","description":"Examines policy alignment and local preparedness for climate-resilient water, sanitation and hygiene across Nepal's federal structure.","tags":["WASH","Water","Local Government","Resilience"],"source":"uploaded"},
+    {"category":"Uploaded & Indexed","id":"r03","title":"National Climate Change Policy 2019 (2076 BS)","year":2019,"type":"National Policy","author":"Ministry of Forests and Environment (MoFE)","language":"Nepali","url":"https://mofe.gov.np","description":"Nepal's overarching climate change policy establishing mitigation and adaptation targets across all sectors, forming the basis for Nepal's NDC and NAP.","tags":["Mitigation","Adaptation","NDC","Governance"],"source":"uploaded"},
+    {"category":"Uploaded & Indexed","id":"r04","title":"Nepal Climate Change, Health and WASH Nexus","year":2022,"type":"Research Report","author":"Ministry of Health and Population","language":"English","url":"https://climate.mohp.gov.np","description":"Analyzes the intersection of climate change with public health and WASH outcomes. Epidemics cause 52.8% of climate-induced deaths in Nepal.","tags":["Health","WASH","Epidemics","Vulnerability"],"source":"uploaded"},
+    {"category":"Uploaded & Indexed","id":"r05","title":"Environment Protection Act / Nepal Environment Policy","year":1993,"type":"Legislation","author":"Government of Nepal","language":"English/Nepali","url":"https://mofe.gov.np","description":"Foundational environmental legislation establishing Nepal's regulatory framework for environmental protection, conservation and sustainable natural resource use.","tags":["Environment","Biodiversity","Conservation","Law"],"source":"uploaded"},
+    {"category":"Uploaded & Indexed","id":"r06","title":"Climate Finance and Loss & Damage: Global and Nepal Perspectives","year":2024,"type":"Working Paper","author":"National Planning Commission","language":"English","url":"https://npc.gov.np","description":"Reviews global climate finance architecture focusing on the COP28 Loss and Damage Fund and implications for Nepal's access to climate resources.","tags":["Climate Finance","L&D Fund","COP28","LDC"],"source":"uploaded"},
+    {"category":"National Policies & Strategies","id":"r07","title":"Nepal's Third Nationally Determined Contribution (NDC 3.0)","year":2025,"type":"UNFCCC Submission","author":"Ministry of Forests and Environment (MoFE)","language":"English","url":"https://unfccc.int/sites/default/files/2025-05/Nepal%20NDC3.pdf","description":"Nepal's NDC submitted May 2025. Targets 17.12% GHG reduction by 2030 and 26.79% by 2035 vs BAU. Total cost USD 73.74 billion; 85% conditional on international climate finance.","tags":["NDC","Mitigation","Net-zero 2045","UNFCCC"],"source":"internet"},
+    {"category":"National Policies & Strategies","id":"r08","title":"National Adaptation Plan (NAP) 2021-2050","year":2021,"type":"National Plan","author":"Ministry of Forests and Environment (MoFE)","language":"English","url":"https://unfccc.int/sites/default/files/resource/NAP_Nepal_2021.pdf","description":"30-year adaptation roadmap covering 9 sectors with total cost USD 47.4 billion. Supported by GCF/UNEP. Covers DRR, water, health, agriculture, forests, and cross-cutting themes.","tags":["Adaptation","NAP","GCF","Long-term"],"source":"internet"},
+    {"category":"National Policies & Strategies","id":"r09","title":"Long-term Strategy for Net-Zero Emissions (LTS) 2021","year":2021,"type":"Long-term Strategy","author":"Government of Nepal","language":"English","url":"https://unfccc.int/sites/default/files/resource/NepalLTLEDS.pdf","description":"Nepal's pathway to carbon neutrality by 2045. Two scenarios: WEM (With Existing Measures) and WAM (With Additional Measures). Includes clean energy trade scenarios for hydropower export.","tags":["Net-zero","Mitigation","Energy","Long-term"],"source":"internet"},
+    {"category":"National Policies & Strategies","id":"r10","title":"Disaster Risk Reduction National Strategic Plan of Action 2018-2030","year":2018,"type":"Strategic Plan","author":"Ministry of Home Affairs (MoHA)","language":"English","url":"https://ndrrma.gov.np","description":"Nepal's Sendai Framework-aligned DRR strategy. Goals include lowering 7 glacial lakes and establishing a multi-hazard early warning system by 2030.","tags":["DRR","Sendai Framework","Hazards","EWS"],"source":"internet"},
+    {"category":"National Policies & Strategies","id":"r11","title":"16th National Periodic Plan 2024/25-2028/29","year":2024,"type":"Development Plan","author":"National Planning Commission (NPC)","language":"English/Nepali","url":"https://npc.gov.np","description":"Nepal's current Five-Year Plan emphasizing climate-development interlinkage, gender mainstreaming, and DRR integration. Acknowledges impacts on marginalized communities and smallholder farmers.","tags":["Development","Planning","Gender","DRR"],"source":"internet"},
+    {"category":"National Policies & Strategies","id":"r12","title":"National Climate Change Health Adaptation Plan (HNAP) 2023-2030","year":2023,"type":"Sectoral Plan","author":"Ministry of Health and Population","language":"English","url":"https://www.atachcommunity.com/fileadmin/uploads/atach/Documents/Country_documents/Nepal_HNAP_English_2024_FINAL.pdf","description":"Short-term (2023-24) and long-term (2025-30) health adaptation plan. Nepal targets net-zero health emissions by 2045. Covers disease surveillance, WASH resilience, and 1,400 climate-smart facilities by 2030.","tags":["Health","Adaptation","WASH","Surveillance"],"source":"internet"},
+    {"category":"Data Portals & Tools","id":"r13","title":"BIPAD Portal — National Disaster Information Management System","year":2020,"type":"Data Portal","author":"NDRRMA, Government of Nepal","language":"English/Nepali","url":"https://bipadportal.gov.np","description":"Nepal's integrated national disaster data platform with 6 modules covering hazards, risk, incidents, early warning, and recovery tracking. Data available at Palika level.","tags":["Data","Disasters","Early Warning","NDRRMA"],"source":"internet"},
+    {"category":"Data Portals & Tools","id":"r14","title":"Department of Hydrology and Meteorology (DHM) — Climate Data","year":2024,"type":"Data Portal","author":"DHM, Government of Nepal","language":"English/Nepali","url":"http://dhm.gov.np","description":"Nepal's hydro-meteorological data including 337 precipitation stations, 154 hydrometric stations, 68 climatic stations. Provides daily weather data, flood warnings, and climate projections.","tags":["Hydrology","Meteorology","Climate Data","Floods"],"source":"internet"},
+    {"category":"Data Portals & Tools","id":"r15","title":"Climate Change Laws of the World — Nepal Profile","year":2024,"type":"Database","author":"Grantham Research Institute, LSE","language":"English","url":"https://climate-laws.org/geographies/nepal","description":"Comprehensive real-time database of Nepal's climate laws, policies, targets and legislative processes maintained by the Grantham Research Institute at LSE.","tags":["Laws","Policy Database","Legislation","Tracking"],"source":"internet"},
+    {"category":"Data Portals & Tools","id":"r16","title":"Nepal — Climate Action Tracker Assessment","year":2024,"type":"Assessment Tool","author":"Climate Action Tracker (CAT)","language":"English","url":"https://climateactiontracker.org/countries/nepal/","description":"Independent assessment of Nepal's NDC ambition and policy implementation. Nepal's policies rated '1.5°C compatible' vs fair share but emissions increased 41.5% between 2010-2021.","tags":["NDC Rating","Tracking","Emissions","1.5°C"],"source":"internet"},
+    {"category":"Data Portals & Tools","id":"r17","title":"Climate Change Statistics and Indicators of Nepal","year":2022,"type":"Statistical Report","author":"Central Bureau of Statistics (CBS)","language":"English","url":"https://unstats.un.org/unsd/envstats/compendia/Nepal_ClimateChangeRelatedIndicatorsofNepal_2022.pdf","description":"First national climate statistics report covering 7 themes: emissions, disasters, impacts, exposure, sensitivity, adaptive capacity, and mitigation capacity. Supports UNFCCC ETF reporting.","tags":["Statistics","Indicators","CBS","Transparency"],"source":"internet"},
+    {"category":"International Frameworks","id":"r18","title":"UNFCCC Warsaw International Mechanism (WIM) for Loss and Damage","year":2013,"type":"International Mechanism","author":"UNFCCC","language":"English","url":"https://unfccc.int/process-and-meetings/bodies/constituted-bodies/warsaw-international-mechanism-for-loss-and-damage-wim","description":"Primary UNFCCC mechanism for addressing climate-induced L&D. Established COP19, anchored in Paris Agreement Article 8. Nepal advocates for L&D as a standalone third pillar of negotiations.","tags":["L&D","WIM","UNFCCC","COP","Finance"],"source":"internet"},
+    {"category":"International Frameworks","id":"r19","title":"Paris Agreement — NDC Registry","year":2015,"type":"International Agreement","author":"UNFCCC","language":"English","url":"https://unfccc.int/NDCREG","description":"Framework under which Nepal submits NDCs. Article 8 covers Loss and Damage. Nepal's NDC 3.0 (May 2025) publicly accessible in the UNFCCC NDC registry.","tags":["Paris Agreement","NDC","L&D","UNFCCC"],"source":"internet"},
+    {"category":"International Frameworks","id":"r20","title":"Sendai Framework for Disaster Risk Reduction 2015-2030","year":2015,"type":"International Framework","author":"UNDRR","language":"English","url":"https://www.undrr.org/publication/sendai-framework-disaster-risk-reduction-2015-2030","description":"Global DRR framework adopted by Nepal. Nepal's DRR Strategic Plan 2018-2030 is fully aligned to Sendai targets including glacial lake lowering and early warning systems.","tags":["Sendai","DRR","UNDRR","Hazards"],"source":"internet"},
+    {"category":"International Frameworks","id":"r21","title":"Hindu Kush Himalaya Assessment Report (ICIMOD)","year":2019,"type":"Scientific Assessment","author":"ICIMOD","language":"English","url":"https://www.icimod.org/hkhassessment/","description":"Comprehensive scientific evidence on HKH climate risks. Shows even 1.5°C global warming causes 1.8-2.2°C in HKH due to elevation-dependent warming. Directly referenced in Nepal's L&D Framework.","tags":["HKH","ICIMOD","Science","Glaciers"],"source":"internet"},
+    {"category":"Climate Finance Resources","id":"r22","title":"Green Climate Fund (GCF) — Nepal Country Portfolio","year":2024,"type":"Finance Portal","author":"Green Climate Fund (GCF)","language":"English","url":"https://www.greenclimate.fund/countries/NPL","description":"GCF-funded Nepal projects including Gandaki Basin Resilience (USD 27.4M), Churia Region (USD 39.3M). Accredited national entities: AEPC (Small), NTNC (Micro), NIMB (Medium, 2024).","tags":["GCF","Finance","Adaptation","Projects"],"source":"internet"},
+    {"category":"Climate Finance Resources","id":"r23","title":"World Bank Country Climate and Development Report — Nepal","year":2023,"type":"Country Report","author":"World Bank","language":"English","url":"https://www.worldbank.org/en/country/nepal/brief/key-highlights-country-climate-and-development-report-for-nepal","description":"Identifies pathways for Nepal to achieve development objectives while transitioning to a greener, more resilient economy. Key resource for climate investment planning and priorities.","tags":["World Bank","Finance","Development","Investment"],"source":"internet"},
+    {"category":"Climate Finance Resources","id":"r24","title":"UNDP Climate Promise — Nepal NDC Support Programme","year":2025,"type":"Programme","author":"UNDP","language":"English","url":"https://climatepromise.undp.org/what-we-do/where-we-work/nepal","description":"UNDP support for Nepal's NDC implementation. NDC 3.0 includes USD 18-20 billion for adaptation priorities 2025-2035 and dedicated L&D section estimating losses of USD 345 million.","tags":["UNDP","NDC Support","Adaptation Finance","L&D"],"source":"internet"},
+    {"category":"Research & Reports","id":"r25","title":"IOM Policy Brief: Climate, Migration and Environment in Nepal (2025)","year":2025,"type":"Policy Brief","author":"International Organization for Migration (IOM)","language":"English","url":"https://nepal.iom.int/sites/g/files/tmzbdl1116/files/documents/2025-04/mecc-policy-brief-english-version.pdf","description":"Latest analysis on climate-induced migration. Nepal's 16th Plan acknowledges climate-migration nexus. Covers displacement, cross-border mobility, and gender-responsive climate migration policy.","tags":["Migration","Displacement","Gender","IOM"],"source":"internet"},
+    {"category":"Research & Reports","id":"r26","title":"IPCC Sixth Assessment Report (AR6)","year":2022,"type":"Scientific Report","author":"IPCC","language":"English","url":"https://www.ipcc.ch/assessment-report/ar6/","description":"Confirms accelerating glacier retreat in HKH; Nepal among most at-risk countries. Confirms soft/hard adaptation limits directly referenced in Nepal's L&D Framework and NAP.","tags":["IPCC","Science","Glaciers","Adaptation Limits"],"source":"internet"},
+    {"category":"Research & Reports","id":"r27","title":"NDC Partnership — Nepal Country Profile","year":2025,"type":"Programme Dashboard","author":"NDC Partnership","language":"English","url":"https://ndcpartnership.org/country/npl","description":"Tracks Nepal's NDC timeline and implementation support. Nepal submitted NDC 3.0 May 2025 targeting 26.8% emission cut by 2035 requiring USD 73.7 billion with 85% from international sources.","tags":["NDC","Tracking","Finance","Implementation"],"source":"internet"},
+]
+RESOURCE_CATEGORIES = ["All"] + sorted(set(r["category"] for r in RESOURCES))
+RESOURCE_TYPES      = ["All"] + sorted(set(r["type"]     for r in RESOURCES))
+RESOURCE_SOURCES    = ["All", "Uploaded & Indexed", "Internet / External"]
+
 
 # ── call_ai: Groq (free) first, Anthropic fallback ─────────────────────────
 def call_ai(system_prompt, messages):
@@ -441,26 +489,13 @@ def call_ai(system_prompt, messages):
     return (
         '⚠️ **No AI key set.**\n\n'
         'Add to **Streamlit Cloud → App Settings → Secrets**:\n\n'
-        '**Option A — Groq (FREE, no credit card):**\n'
+        '**Option A — Groq (FREE):**\n'
         '```\nGROQ_API_KEY = "gsk_..."\n```\n'
-        'Get free key at https://console.groq.com\n\n'
+        'Get key at https://console.groq.com\n\n'
         '**Option B — Anthropic:**\n'
         '```\nANTHROPIC_API_KEY = "sk-ant-..."\n```'
     )
 
-
-# ── Stats row ──────────────────────────────────────────────────────────────
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("Total Documents", len(DOCUMENTS) + len(st.session_state.uploaded_docs), help="Uploaded policy documents")
-with col2:
-    st.metric("Sectors Covered", "8", help="Cross-cutting sectors")
-with col3:
-    st.metric("Federal Policies", "6", help="National-level policies")
-with col4:
-    st.metric("Year Span", "1993–2026", help="Temporal coverage")
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: POLICY EXPLORER
@@ -621,7 +656,7 @@ Instructions:
             messages = [{"role": m["role"], "content": m["content"]}
                         for m in st.session_state.chat_history]
 
-            with st.spinner('Analyzing policies…'):
+            with st.spinner("Analyzing policies…"):
                 reply = call_ai(system_prompt, messages)
 
             st.session_state.chat_history.append({"role": "assistant", "content": reply})
@@ -652,15 +687,14 @@ Instructions:
 
         st.info("💡 Upload more documents in the 'Upload Policy' tab to expand the AI's knowledge base.")
 
-        _gk = st.secrets.get('GROQ_API_KEY', '') or os.environ.get('GROQ_API_KEY', '')
-        _ak = st.secrets.get('ANTHROPIC_API_KEY', '') or os.environ.get('ANTHROPIC_API_KEY', '')
+        _gk = st.secrets.get("GROQ_API_KEY", "") or os.environ.get("GROQ_API_KEY", "")
+        _ak = st.secrets.get("ANTHROPIC_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", "")
         if _gk:
-            st.success('⚡ AI: Groq (free tier) · llama-3.3-70b')
+            st.success("⚡ AI: Groq (free tier) · llama-3.3-70b")
         elif _ak:
-            st.info('🤖 AI: Anthropic Claude')
+            st.info("🤖 AI: Anthropic Claude")
         else:
-            st.warning('⚠️ No key set — add GROQ_API_KEY to Secrets (free!)')
-
+            st.warning("⚠️ No key — add GROQ_API_KEY to Secrets")
         st.markdown("### 🌐 Bilingual support")
         st.markdown("Ask in **English** or **नेपाली**. The assistant responds in the same language.")
 
@@ -897,6 +931,134 @@ elif "Provinces" in page:
         legend=dict(font=dict(size=10), orientation="h", y=-0.15),
     )
     st.plotly_chart(fig, use_container_width=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PAGE: RESOURCES
+# ═══════════════════════════════════════════════════════════════════════════
+elif "Resources" in page:
+    st.markdown("### 📚 Resources Library")
+    st.markdown(
+        "Comprehensive library of climate policy documents — **uploaded & indexed** in this portal "
+        "and **externally sourced** from UNFCCC, World Bank, UNDP, ICIMOD, and Government of Nepal portals."
+    )
+
+    col_rs, col_rcat, col_rtype, col_rsrc = st.columns([3, 1.8, 1.8, 1.5])
+    with col_rs:
+        res_search = st.text_input("", placeholder="🔍  Search title, author, tags…",
+                                   key="res_search", label_visibility="collapsed")
+    with col_rcat:
+        res_cat  = st.selectbox("Category", RESOURCE_CATEGORIES, key="res_cat")
+    with col_rtype:
+        res_type = st.selectbox("Type", RESOURCE_TYPES, key="res_type")
+    with col_rsrc:
+        res_src  = st.selectbox("Source", RESOURCE_SOURCES, key="res_src")
+
+    def res_matches(r):
+        q = res_search.lower()
+        if q and not any(q in str(v).lower() for v in [r["title"], r["description"], r["author"]] + r["tags"]):
+            return False
+        if res_cat  != "All" and r["category"] != res_cat:  return False
+        if res_type != "All" and r["type"]     != res_type: return False
+        if res_src  == "Uploaded & Indexed"   and r["source"] != "uploaded": return False
+        if res_src  == "Internet / External"  and r["source"] != "internet": return False
+        return True
+
+    filtered_res = [r for r in RESOURCES if res_matches(r)]
+    up_n = len([r for r in RESOURCES if r["source"] == "uploaded"])
+    in_n = len([r for r in RESOURCES if r["source"] == "internet"])
+
+    st.markdown(
+        f'<div class="section-label">'
+        f'{len(filtered_res)} of {len(RESOURCES)} resources shown · '
+        f'<span style="color:#2d6a45;font-weight:600;">📁 {up_n} uploaded</span> · '
+        f'<span style="color:#1e4f7a;font-weight:600;">🌐 {in_n} from internet</span>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for r in filtered_res:
+        grouped[r["category"]].append(r)
+
+    cat_meta = {
+        "Uploaded & Indexed":             ("📁", "#2d6a45"),
+        "National Policies & Strategies": ("🏛",  "#1e4f7a"),
+        "Data Portals & Tools":           ("📊", "#7a4a1e"),
+        "International Frameworks":       ("🌐", "#5a2d7a"),
+        "Climate Finance Resources":      ("💰", "#b56a00"),
+        "Research & Reports":             ("🔬", "#1e6a6a"),
+    }
+
+    for cat_name, cat_resources in grouped.items():
+        icon, color = cat_meta.get(cat_name, ("📄", "#2d6a45"))
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:10px;margin:22px 0 8px;">'
+            f'<span style="font-size:18px;">{icon}</span>'
+            f'<span style="font-size:15px;font-weight:700;color:{color};">{cat_name}</span>'
+            f'<span style="font-size:11px;color:#8a8a84;background:#f5f0e8;padding:2px 8px;border-radius:10px;">{len(cat_resources)}</span>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+        for r in cat_resources:
+            src_badge = (
+                '<span style="background:#2d6a4518;color:#2d6a45;font-size:10px;padding:2px 7px;border-radius:3px;border:0.5px solid #2d6a4540;">📁 Uploaded</span>'
+                if r["source"] == "uploaded" else
+                '<span style="background:#1e4f7a18;color:#1e4f7a;font-size:10px;padding:2px 7px;border-radius:3px;border:0.5px solid #1e4f7a40;">🌐 Internet</span>'
+            )
+            tag_html = " ".join(
+                f'<span style="font-size:10px;background:#f5f0e8;color:#4a4a46;padding:2px 6px;border-radius:3px;display:inline-block;margin:1px;">{t}</span>'
+                for t in r["tags"]
+            )
+            with st.expander(f"  {r['title']}  ·  {r['year']}", expanded=False):
+                col_d, col_m = st.columns([3, 1])
+                with col_d:
+                    st.markdown(
+                        f'<div style="background:#faf7f2;border-left:3px solid {color};padding:10px 14px;'
+                        f'border-radius:0 8px 8px 0;font-size:13px;color:#4a4a46;line-height:1.7;margin-bottom:10px;">'
+                        f'{r["description"]}</div>',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(f'<div style="margin-bottom:8px;">{tag_html}</div>', unsafe_allow_html=True)
+                    if r.get("url","").startswith("http"):
+                        st.markdown(
+                            f'<a href="{r["url"]}" target="_blank" style="font-size:12px;color:{color};'
+                            f'text-decoration:none;border:0.5px solid {color}40;padding:5px 14px;'
+                            f'border-radius:6px;display:inline-block;">🔗 Open resource →</a>',
+                            unsafe_allow_html=True
+                        )
+                with col_m:
+                    st.markdown(
+                        f'<div style="background:#f5f0e8;border-radius:8px;padding:12px 14px;">'
+                        f'<div style="font-size:10px;color:#8a8a84;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Type</div>'
+                        f'<div style="font-size:11px;color:#1a1a18;font-weight:500;margin-bottom:8px;">{r["type"]}</div>'
+                        f'<div style="font-size:10px;color:#8a8a84;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Author</div>'
+                        f'<div style="font-size:11px;color:#1a1a18;margin-bottom:8px;line-height:1.4;">{r["author"]}</div>'
+                        f'<div style="font-size:10px;color:#8a8a84;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Language</div>'
+                        f'<div style="font-size:11px;color:#1a1a18;margin-bottom:8px;">{r["language"]}</div>'
+                        f'<div>{src_badge}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+    if not filtered_res:
+        st.info("No resources match your filters. Try broadening your search.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.expander("➕  Suggest a resource to add"):
+        with st.form("suggest_resource"):
+            sug_title = st.text_input("Resource title *")
+            sug_url   = st.text_input("URL *")
+            c1, c2 = st.columns(2)
+            with c1: sug_year = st.number_input("Year", 1990, 2030, 2024)
+            with c2: sug_cat  = st.selectbox("Category", RESOURCE_CATEGORIES[1:])
+            sug_desc = st.text_area("Description", height=80)
+            if st.form_submit_button("Submit suggestion", type="primary"):
+                if sug_title and sug_url:
+                    st.success(f"✅ '{sug_title}' noted for review. Thank you!")
+                else:
+                    st.error("Please fill in at least the title and URL.")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PAGE: UPLOAD POLICY
