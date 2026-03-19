@@ -27,7 +27,7 @@ st.set_page_config(
     page_title="Nepal Climate Policy Intelligence Portal",
     page_icon="🏔",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown("""
@@ -37,24 +37,11 @@ st.markdown("""
   html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
   h1, h2, h3 { font-family: 'Lora', serif !important; }
   .main { background: #faf7f2; }
-  .block-container { padding: 1.5rem 2rem 2rem; max-width: 1300px; }
+  .block-container { padding: 1rem 2rem 2rem; max-width: 1400px; }
 
-  /* Sidebar background only — no text rules here to avoid hiding collapse arrow */
-  section[data-testid="stSidebar"] { background: #1a4a2e !important; }
-  section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.2) !important; }
-
-  /* Selectbox inside sidebar */
-  section[data-testid="stSidebar"] .stSelectbox > div > div {
-    background: rgba(255,255,255,0.1) !important;
-    border-color: rgba(255,255,255,0.2) !important;
-    color: white !important;
-  }
-  section[data-testid="stSidebar"] .stSelectbox label { color: white !important; }
-
-  /* Radio widget labels */
-  section[data-testid="stSidebar"] .stRadio label,
-  section[data-testid="stSidebar"] .stRadio span,
-  section[data-testid="stSidebar"] .stRadio p { color: white !important; }
+  /* Hide sidebar entirely */
+  section[data-testid="stSidebar"] { display: none !important; }
+  [data-testid="collapsedControl"]  { display: none !important; }
 
   /* Metric cards */
   [data-testid="metric-container"] {
@@ -65,6 +52,32 @@ st.markdown("""
     border-left: 3px solid #2d6a45;
   }
 
+  /* Tabs — forest green active indicator */
+  .stTabs [data-baseweb="tab-list"] {
+    gap: 0px;
+    background: white;
+    border-radius: 10px;
+    padding: 4px;
+    border: 0.5px solid rgba(26,26,24,0.12);
+    margin-bottom: 20px;
+  }
+  .stTabs [data-baseweb="tab"] {
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4a4a46;
+    background: transparent;
+    border: none;
+  }
+  .stTabs [aria-selected="true"] {
+    background: #1a4a2e !important;
+    color: white !important;
+  }
+  .stTabs [data-baseweb="tab-highlight"] { display: none; }
+  .stTabs [data-baseweb="tab-border"]    { display: none; }
+
+  /* Chat messages */
   .user-msg {
     background: #2d6a45; color: white; padding: 10px 14px;
     border-radius: 12px 12px 4px 12px; margin: 6px 0 6px 20%;
@@ -93,8 +106,8 @@ st.markdown("""
   }
 
   #MainMenu { visibility: hidden; }
-  footer { visibility: hidden; }
-  header { visibility: hidden; }
+  footer    { visibility: hidden; }
+  header    { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -163,52 +176,9 @@ def status_color(s):
 def risk_color(r):
     return {"Very High":"#c94030","High":"#c47c40","Moderate":"#2d7a4f","Low":"#2e72b0"}.get(r,"#8a8a84")
 
-# ── Sidebar ────────────────────────────────────────────────────────────────
-with st.sidebar:
-    # All sidebar text uses inline color:white to guarantee visibility
-    # regardless of which Streamlit version's CSS class names are used
-    st.markdown(
-        '<div style="text-align:center;padding:8px 0 16px;">'
-        '<div style="font-size:40px;">🏔</div>'
-        '<div style="font-size:15px;font-weight:700;color:white;font-family:Lora,serif;margin-top:6px;">Nepal Climate Portal</div>'
-        '<div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:4px;letter-spacing:0.04em;">POLICY INTELLIGENCE SYSTEM</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown('<hr style="border-color:rgba(255,255,255,0.2);">', unsafe_allow_html=True)
-
-    page = st.radio(
-        "nav",
-        ["📋 Policy Explorer","🤖 AI Assistant","📊 Analytics","🗺 Provinces","📚 Resources","📤 Upload Policy"],
-        label_visibility="collapsed",
-    )
-    st.markdown('<hr style="border-color:rgba(255,255,255,0.2);">', unsafe_allow_html=True)
-
-    lang_choice = st.radio("Language / भाषा", ["English","नेपाली"], horizontal=True, label_visibility="visible")
-    st.session_state.lang = "EN" if lang_choice == "English" else "NP"
-    st.markdown('<hr style="border-color:rgba(255,255,255,0.2);">', unsafe_allow_html=True)
-
-    # Use inline color:white on every element — bypasses ALL CSS class uncertainties
-    st.markdown(
-        f'<p style="font-size:11px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Database status</p>'
-        f'<p style="font-size:12px;color:white;line-height:2.2;margin:0;">'
-        f'📄 {_n_total} documents indexed<br>'
-        f'🏛 6 Federal policies<br>'
-        f'🌐 {len([d for d in DOCUMENTS if d["language"]=="English"])} in English<br>'
-        f'📝 1 in नेपाली<br>'
-        f'⏳ 100+ expected</p>',
-        unsafe_allow_html=True,
-    )
-    st.markdown('<hr style="border-color:rgba(255,255,255,0.2);">', unsafe_allow_html=True)
-
-    st.markdown('<p style="font-size:11px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Climate risk legend</p>', unsafe_allow_html=True)
-    for rl, rc in [("Very High","#c94030"),("High","#c47c40"),("Moderate","#2d7a4f")]:
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
-            f'<span style="width:8px;height:8px;border-radius:50%;background:{rc};display:inline-block;flex-shrink:0;"></span>'
-            f'<span style="font-size:11px;color:white;">{rl}</span></div>',
-            unsafe_allow_html=True,
-        )
+# ── Language toggle (no sidebar — use session state directly) ──────────────
+if "lang" not in st.session_state:
+    st.session_state.lang = "EN"
 
 # ── Header banner ──────────────────────────────────────────────────────────
 title_text    = "Nepal Climate Policy Intelligence Portal" if st.session_state.lang=="EN" else "नेपाल जलवायु नीति बौद्धिक पोर्टल"
@@ -246,6 +216,16 @@ with col4:
     st.metric("Year Span", "1993-2026", help="Temporal coverage")
 
 st.markdown("<br>", unsafe_allow_html=True)
+
+# ── Horizontal navigation tabs ─────────────────────────────────────────────
+tab_explorer, tab_ai, tab_analytics, tab_provinces, tab_resources, tab_upload = st.tabs([
+    "📋 Policy Explorer",
+    "🤖 AI Assistant",
+    "📊 Analytics",
+    "🗺 Provinces",
+    "📚 Resources",
+    "📤 Upload Policy",
+])
 
 # ── Resources catalogue ────────────────────────────────────────────────────
 RESOURCES = [
@@ -309,9 +289,7 @@ def call_ai(system_prompt, messages):
         except Exception as e: return "Anthropic error: "+str(e)
     return "No AI key set. Add GROQ_API_KEY (free at console.groq.com) or ANTHROPIC_API_KEY to Streamlit Secrets."
 
-# ═══════════════════════════════════════════════════════════════════════════
-if "Policy Explorer" in page:
-# ═══════════════════════════════════════════════════════════════════════════
+with tab_explorer:
     all_docs = DOCUMENTS + st.session_state.uploaded_docs
     col_s,col_sec,col_lev,col_th = st.columns([3,1.5,1.5,1.5])
     with col_s:
@@ -356,9 +334,7 @@ if "Policy Explorer" in page:
 
     if not filtered: st.info("No policies match your filters.")
 
-# ═══════════════════════════════════════════════════════════════════════════
-elif "AI Assistant" in page:
-# ═══════════════════════════════════════════════════════════════════════════
+with tab_ai:
     col_chat,col_side = st.columns([2.5,1])
     with col_chat:
         st.markdown("### 🤖 Nepal Climate Policy AI")
@@ -416,9 +392,7 @@ elif "AI Assistant" in page:
         elif ak: st.info("AI: Anthropic Claude")
         else: st.warning("Add GROQ_API_KEY to Secrets for free AI")
 
-# ═══════════════════════════════════════════════════════════════════════════
-elif "Analytics" in page:
-# ═══════════════════════════════════════════════════════════════════════════
+with tab_analytics:
     st.markdown("### 📊 Policy Analytics Dashboard")
     all_docs = DOCUMENTS + st.session_state.uploaded_docs
     c1,c2 = st.columns(2)
@@ -534,9 +508,7 @@ elif "Analytics" in page:
         sc={"high":"#c94030","medium":"#c47c40","low":"#8a8a84"}[g["severity"]]
         st.markdown(f'<div style="background:white;border:0.5px solid rgba(26,26,24,0.1);border-left:3px solid {sc};border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:600;color:#1a1a18;">{g["gap"]}</div><div style="font-size:11px;color:#4a4a46;margin-top:3px;">{g["note"]}</div></div><span class="badge {status_color(g["status"])}">{g["status"]}</span></div>',unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════════════════
-elif "Provinces" in page:
-# ═══════════════════════════════════════════════════════════════════════════
+with tab_provinces:
     st.markdown("### 🗺 Provincial Climate Policy Coverage")
     cm,cd=st.columns([1.5,2])
     with cm:
@@ -567,9 +539,7 @@ elif "Provinces" in page:
     figp.update_layout(paper_bgcolor="white",plot_bgcolor="white",height=300,margin=dict(l=0,r=0,t=40,b=0),yaxis=dict(showgrid=True,gridcolor="rgba(0,0,0,0.05)"),font=dict(family="Inter, sans-serif"),title_font_size=13,legend=dict(font=dict(size=10),orientation="h",y=-0.15))
     st.plotly_chart(figp,use_container_width=True)
 
-# ═══════════════════════════════════════════════════════════════════════════
-elif "Resources" in page:
-# ═══════════════════════════════════════════════════════════════════════════
+with tab_resources:
     st.markdown("### 📚 Resources Library")
     st.markdown("Comprehensive library — **uploaded & indexed** in this portal and **externally sourced** from UNFCCC, World Bank, UNDP, ICIMOD, and Government of Nepal portals.")
     cr,crc,crt,crs=st.columns([3,1.8,1.8,1.5])
@@ -621,9 +591,7 @@ elif "Resources" in page:
                 if st_ and su: st.success(f"'{st_}' noted. Thank you!")
                 else: st.error("Please fill in title and URL.")
 
-# ═══════════════════════════════════════════════════════════════════════════
-elif "Upload Policy" in page:
-# ═══════════════════════════════════════════════════════════════════════════
+with tab_upload:
     st.markdown("### 📤 Upload Policy Document")
     if st.session_state.last_upload_title:
         st.success(f"✅ **'{st.session_state.last_upload_title}'** added successfully!")
