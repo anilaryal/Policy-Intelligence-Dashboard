@@ -6,6 +6,8 @@ Requires: pip install streamlit anthropic PyPDF2 plotly pandas
 import streamlit as st
 import os
 import io
+import json
+import re
 import requests
 import pandas as pd
 import plotly.express as px
@@ -146,10 +148,37 @@ POLICY_GAPS = [
     {"gap":"Urban Climate Resilience","status":"Missing","severity":"medium","note":"Rapid urbanization not addressed in current documents"},
 ]
 
+# ── Persistent document store ──────────────────────────────────────────────
+# Uses st.cache_resource so the store survives reruns & code-only redeploys.
+# JSON is also written to /tmp/nepal_docs.json as a secondary persistence layer.
+PERSIST_FILE = "/tmp/nepal_policy_docs.json"
+
+@st.cache_resource
+def _get_doc_store():
+    """In-memory store shared across all reruns in the same server process.
+    Initialised from the JSON file if it exists (survives code-only redeploys)."""
+    if os.path.exists(PERSIST_FILE):
+        try:
+            with open(PERSIST_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def save_doc_store(docs):
+    """Write the current doc list to the JSON file for persistence."""
+    try:
+        with open(PERSIST_FILE, "w", encoding="utf-8") as f:
+            json.dump(docs, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass  # /tmp write failure is non-fatal
+
 # ── Session state ──────────────────────────────────────────────────────────
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [{"role":"assistant","content":"नमस्ते! I am Nepal's Climate Policy Intelligence Assistant.\n\nI have knowledge of 6 climate policy documents covering Loss & Damage, WASH, Climate Change Policy 2019, Health-Climate Nexus, Environment Law, and Climate Finance.\n\nAsk me anything about:\n• Policy gaps and overlaps\n• Sector-specific provisions\n• Province-level recommendations\n• UNFCCC alignment\n• Finance mechanisms\n\nYou can ask in English or नेपाली!"}]
-if "uploaded_docs"     not in st.session_state: st.session_state.uploaded_docs     = []
+if "uploaded_docs" not in st.session_state:
+    # Load from the persistent cache resource on first run
+    st.session_state.uploaded_docs = list(_get_doc_store())
 if "selected_doc"      not in st.session_state: st.session_state.selected_doc      = None
 if "lang"              not in st.session_state: st.session_state.lang              = "EN"
 if "upload_form_key"   not in st.session_state: st.session_state.upload_form_key   = 0
@@ -172,6 +201,43 @@ def extract_pdf_text(file_bytes, max_chars=8000):
         return text[:max_chars]
     except Exception as e:
         return f"[Could not extract: {e}]"
+
+def extract_url_text(url: str, max_chars: int = 8000) -> tuple[str, str]:
+    """Fetch a URL and extract readable text. Returns (text, error_msg)."""
+    try:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+        }
+        resp = requests.get(url.strip(), headers=headers, timeout=15)
+        resp.raise_for_status()
+        content_type = resp.headers.get("content-type", "")
+
+        # PDF served via URL
+        if "pdf" in content_type or url.lower().endswith(".pdf"):
+            return extract_pdf_text(resp.content, max_chars), ""
+
+        # HTML — strip tags for plain text
+        html = resp.text
+        # Remove script/style blocks
+        html = re.sub(r"<(script|style)[^>]*>.*?</(script|style)>", " ", html, flags=re.S|re.I)
+        # Remove all tags
+        text = re.sub(r"<[^>]+>", " ", html)
+        # Collapse whitespace
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:max_chars], ""
+    except requests.exceptions.Timeout:
+        return "", "Request timed out. The URL may be slow or unavailable."
+    except requests.exceptions.ConnectionError:
+        return "", "Could not connect to the URL. Check that it is publicly accessible."
+    except requests.exceptions.HTTPError as e:
+        return "", f"HTTP error {e.response.status_code}: The page returned an error."
+    except Exception as e:
+        return "", f"Could not fetch URL: {e}"
 
 def badge_html(text, cls="badge-green"):
     return f'<span class="badge {cls}">{text}</span>'
@@ -199,7 +265,7 @@ st.markdown(
     '<h1 style="color:white;font-size:22px;margin:0;font-family:Lora,serif;font-weight:700;">' + title_text + '</h1>'
     '<div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px;">' + subtitle_text + '</div>'
     '<div style="display:flex;gap:8px;margin-top:10px;">'
-    '<span style="background:rgba(255,255,255,0.15);color:white;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;">&#9679; LIVE</span>'
+    # '<span style="background:rgba(255,255,255,0.15);color:white;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;">&#9679; LIVE</span>'
     '<span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">' + str(_n_total) + ' documents indexed</span>'
     '<span style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:3px 10px;border-radius:20px;font-size:10px;">AI-powered search</span>'
     '</div></div></div>',
@@ -598,57 +664,142 @@ with tab_resources:
                 else: st.error("Please fill in title and URL.")
 
 with tab_upload:
-    st.markdown("### 📤 Upload Policy Document")
+    st.markdown("### 📤 Add Policy to Database")
+    st.markdown("Upload a PDF/text file **or** paste a website URL — the system extracts the content automatically and remembers it across sessions.")
+
     if st.session_state.last_upload_title:
-        st.success(f"✅ **'{st.session_state.last_upload_title}'** added successfully!")
+        st.success(f"✅ **'{st.session_state.last_upload_title}'** added and saved permanently!")
         st.balloons()
-        st.session_state.last_upload_title=""
-    cf,ci=st.columns([2,1])
+        st.session_state.last_upload_title = ""
+
+    cf, ci = st.columns([2, 1])
     with cf:
-        fk=f"upload_form_{st.session_state.upload_form_key}"
-        with st.form(fk,clear_on_submit=False):
+        # ── Source type selector ──────────────────────────────────────────
+        src_type = st.radio(
+            "Content source",
+            ["📄 Upload file (PDF / TXT)", "🌐 Paste a website URL"],
+            horizontal=True,
+            label_visibility="visible",
+        )
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        fk = f"upload_form_{st.session_state.upload_form_key}"
+        with st.form(fk, clear_on_submit=False):
             st.markdown("**Document details**")
-            dt=st.text_input("Full title *",placeholder="e.g. Karnali Province Climate Change Adaptation Plan 2023")
-            y1,l1,s1=st.columns(3)
-            with y1: dy=st.number_input("Year *",min_value=1990,max_value=2030,value=2023)
-            with l1: dl=st.selectbox("Level *",["Federal","Provincial","Local"])
-            with s1: ds=st.selectbox("Status",["Active","Approved","Draft","Foundational"])
-            dm=st.text_input("Ministry / Author",placeholder="e.g. Ministry of Forests and Environment")
-            dsec=st.multiselect("Sectors",["Climate Change","Water","Agriculture","Energy","Disaster Risk","Health","Environment","Finance","Forests","Urban"])
-            dth=st.multiselect("Themes",["Adaptation","Mitigation","Governance","Finance","Gender & Inclusion","Biodiversity"])
-            dlan=st.selectbox("Language",["English","Nepali","English/Nepali"])
-            dsum=st.text_area("Summary",placeholder="Brief description...",height=100)
-            dkw=st.text_input("Keywords (comma-separated)",placeholder="e.g. GLOF, adaptation")
-            uf=st.file_uploader("Upload document (PDF / TXT)",type=["pdf","txt"])
-            sub=st.form_submit_button("➕ Add to database",type="primary",use_container_width=True)
+            dt  = st.text_input("Full title *", placeholder="e.g. Karnali Province Climate Change Adaptation Plan 2023")
+            y1, l1, s1 = st.columns(3)
+            with y1: dy = st.number_input("Year *", min_value=1990, max_value=2030, value=2023)
+            with l1: dl = st.selectbox("Level *", ["Federal","Provincial","Local"])
+            with s1: ds = st.selectbox("Status", ["Active","Approved","Draft","Foundational"])
+            dm   = st.text_input("Ministry / Author", placeholder="e.g. Ministry of Forests and Environment")
+            dsec = st.multiselect("Sectors", ["Climate Change","Water","Agriculture","Energy","Disaster Risk","Health","Environment","Finance","Forests","Urban"])
+            dth  = st.multiselect("Themes", ["Adaptation","Mitigation","Governance","Finance","Gender & Inclusion","Biodiversity"])
+            dlan = st.selectbox("Language", ["English","Nepali","English/Nepali"])
+            dsum = st.text_area("Summary", placeholder="Brief description of the policy document…", height=90)
+            dkw  = st.text_input("Keywords (comma-separated)", placeholder="e.g. GLOF, adaptation, water, floods")
+
+            st.markdown("---")
+            # Dynamic source inputs
+            if "URL" in src_type:
+                durl = st.text_input(
+                    "Website / document URL *",
+                    placeholder="https://mofe.gov.np/policy/adaptation-plan-2024",
+                    help="The system will fetch and extract text from this URL automatically.",
+                )
+                dfile = None
+            else:
+                dfile = st.file_uploader("Upload document (PDF / TXT)", type=["pdf","txt"])
+                durl  = ""
+
+            sub = st.form_submit_button("➕ Add to database", type="primary", use_container_width=True)
+
         if sub:
             if not dt.strip() or not dsec:
-                st.error("Please fill in at least the title and one sector.")
+                st.error("⚠️ Please fill in at least the **title** and at least one **sector**.")
+            elif "URL" in src_type and not durl.strip():
+                st.error("⚠️ Please paste a URL to fetch content from.")
             else:
-                ext=""
-                if uf:
-                    fb=uf.read()
-                    ext=extract_pdf_text(fb) if uf.type=="application/pdf" else fb.decode("utf-8",errors="replace")[:8000]
-                nd={"id":f"user-{len(st.session_state.uploaded_docs)+1}","title":dt.strip(),
-                    "short_title":dt.strip()[:50]+("…" if len(dt.strip())>50 else ""),
-                    "year":int(dy),"level":dl,"sector":dsec,"ministry":dm.strip() or "Not specified",
-                    "language":dlan,"keywords":[k.strip() for k in dkw.split(",") if k.strip()],
-                    "filename":uf.name if uf else "manual entry","summary":dsum.strip() or "No summary provided.",
-                    "themes":dth,"status":ds,"highlights":[],"extracted_text":ext}
+                extracted = ""
+                source_label = "manual entry"
+
+                if "URL" in src_type and durl.strip():
+                    with st.spinner(f"Fetching content from {durl.strip()[:60]}…"):
+                        extracted, err = extract_url_text(durl.strip())
+                    if err:
+                        st.error(f"⚠️ Could not fetch URL: {err}")
+                        st.stop()
+                    source_label = durl.strip()
+                    st.info(f"✓ Extracted {len(extracted):,} characters from URL.")
+                elif dfile:
+                    fb = dfile.read()
+                    extracted = (
+                        extract_pdf_text(fb)
+                        if dfile.type == "application/pdf"
+                        else fb.decode("utf-8", errors="replace")[:8000]
+                    )
+                    source_label = dfile.name
+
+                nd = {
+                    "id":             f"user-{len(st.session_state.uploaded_docs)+1}",
+                    "title":          dt.strip(),
+                    "short_title":    dt.strip()[:50] + ("…" if len(dt.strip()) > 50 else ""),
+                    "year":           int(dy),
+                    "level":          dl,
+                    "sector":         dsec,
+                    "ministry":       dm.strip() or "Not specified",
+                    "language":       dlan,
+                    "keywords":       [k.strip() for k in dkw.split(",") if k.strip()],
+                    "filename":       source_label,
+                    "summary":        dsum.strip() or "No summary provided.",
+                    "themes":         dth,
+                    "status":         ds,
+                    "highlights":     [],
+                    "extracted_text": extracted,
+                    "source_type":    "url" if "URL" in src_type else "file",
+                }
                 st.session_state.uploaded_docs.append(nd)
-                st.session_state.last_upload_title=nd["title"]
-                st.session_state.upload_form_key+=1
+                # Persist to cache_resource + JSON file
+                _get_doc_store().clear()
+                _get_doc_store().extend(st.session_state.uploaded_docs)
+                save_doc_store(st.session_state.uploaded_docs)
+                st.session_state.last_upload_title = nd["title"]
+                st.session_state.upload_form_key  += 1
                 st.rerun()
+
     with ci:
         st.markdown("#### Current database")
-        st.metric("Pre-loaded documents",len(DOCUMENTS))
-        st.metric("User-uploaded documents",len(st.session_state.uploaded_docs))
-        st.metric("Total",len(DOCUMENTS)+len(st.session_state.uploaded_docs))
-        st.markdown('<div style="background:#1a4a2e0a;border-radius:10px;border:0.5px solid #2d6a4530;padding:14px 16px;margin-top:12px;"><div style="font-size:12px;font-weight:600;color:#1a4a2e;margin-bottom:8px;">📌 Upload guidelines</div><div style="font-size:11px;color:#4a4a46;line-height:1.8;">✓ PDF or plain text files<br>✓ Any language (EN/NP)<br>✓ Federal, Provincial or Local<br>✓ Text extracted from PDF<br>✓ AI assistant updated immediately<br>✓ Appears in Explorer & Analytics</div></div>',unsafe_allow_html=True)
+        st.metric("Pre-loaded documents", len(DOCUMENTS))
+        st.metric("User-uploaded documents", len(st.session_state.uploaded_docs))
+        st.metric("Total", len(DOCUMENTS) + len(st.session_state.uploaded_docs))
+
+        st.markdown(
+            '<div style="background:#1a4a2e0a;border-radius:10px;border:0.5px solid #2d6a4530;padding:14px 16px;margin-top:12px;">' +
+            '<div style="font-size:12px;font-weight:600;color:#1a4a2e;margin-bottom:8px;">📌 How it works</div>' +
+            '<div style="font-size:11px;color:#4a4a46;line-height:1.9;">' +
+            '✓ Upload PDF / TXT <strong>or</strong> paste a URL<br>' +
+            '✓ Content extracted automatically<br>' +
+            '✓ <strong>Remembered across sessions</strong><br>' +
+            '✓ AI Assistant gets immediate access<br>' +
+            '✓ Appears in Explorer & Analytics</div></div>',
+            unsafe_allow_html=True,
+        )
+
         if st.session_state.uploaded_docs:
-            st.markdown("#### Uploaded documents")
+            st.markdown("#### Saved documents")
             for ud in st.session_state.uploaded_docs:
-                st.markdown(f'<div style="display:flex;gap:8px;margin-bottom:8px;"><span style="color:#2d6a45;">✓</span><div><div style="font-size:12px;font-weight:500;color:#1a1a18;">{ud["short_title"]}</div><div style="font-size:10px;color:#8a8a84;">{ud["year"]} · {ud["level"]}</div></div></div>',unsafe_allow_html=True)
+                icon = "🌐" if ud.get("source_type") == "url" else "📄"
+                st.markdown(
+                    f'<div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;">' +
+                    f'<span style="font-size:13px;">{icon}</span>' +
+                    f'<div><div style="font-size:12px;font-weight:500;color:#1a1a18;">{ud["short_title"]}</div>' +
+                    f'<div style="font-size:10px;color:#8a8a84;">{ud["year"]} · {ud["level"]} · {ud.get("source_type","file").upper()}</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+            if st.button("🗑 Clear all saved documents", type="secondary", use_container_width=True):
+                st.session_state.uploaded_docs = []
+                _get_doc_store().clear()
+                save_doc_store([])
+                st.rerun()
 
 # ── Footer ─────────────────────────────────────────────────────────────────
 st.markdown("<br><br>",unsafe_allow_html=True)
