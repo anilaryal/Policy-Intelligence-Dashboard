@@ -5,18 +5,24 @@ Requires: pip install streamlit anthropic PyPDF2 plotly pandas
 """
 
 import streamlit as st
-import anthropic
 import json
 import os
 import io
 import time
+import requests
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# ── Try importing PDF libs (graceful fallback if missing) ──────────────────
+# ── Graceful imports (never crash on missing packages) ─────────────────────
+try:
+    import anthropic
+    ANTHROPIC_SDK = True
+except ImportError:
+    ANTHROPIC_SDK = False
+
 try:
     import PyPDF2
     PDF_SUPPORT = True
@@ -568,16 +574,50 @@ Instructions:
 
             with st.spinner("Analyzing policies…"):
                 try:
-                    client = anthropic.Anthropic()
-                    response = client.messages.create(
-                        model="claude-sonnet-4-20250514",
-                        max_tokens=1000,
-                        system=system_prompt,
-                        messages=messages,
+                    api_key = (
+                        st.secrets.get("ANTHROPIC_API_KEY", None)
+                        or os.environ.get("ANTHROPIC_API_KEY", None)
                     )
-                    reply = response.content[0].text
+                    if not api_key:
+                        raise ValueError("ANTHROPIC_API_KEY not found.")
+
+                    if ANTHROPIC_SDK:
+                        client = anthropic.Anthropic(api_key=api_key)
+                        response = client.messages.create(
+                            model="claude-sonnet-4-20250514",
+                            max_tokens=1000,
+                            system=system_prompt,
+                            messages=messages,
+                        )
+                        reply = response.content[0].text
+                    else:
+                        resp = requests.post(
+                            "https://api.anthropic.com/v1/messages",
+                            headers={
+                                "x-api-key": api_key,
+                                "anthropic-version": "2023-06-01",
+                                "content-type": "application/json",
+                            },
+                            json={
+                                "model": "claude-sonnet-4-20250514",
+                                "max_tokens": 1000,
+                                "system": system_prompt,
+                                "messages": messages,
+                            },
+                            timeout=30,
+                        )
+                        resp.raise_for_status()
+                        reply = resp.json()["content"][0]["text"]
+
+                except ValueError as e:
+                    reply = (
+                        "⚠️ **API key not configured.**\n\n"
+                        "On Streamlit Cloud, add your key in **App Settings → Secrets**:\n"
+                        "```\nANTHROPIC_API_KEY = \"sk-ant-...\"\n```\n"
+                        "Locally, run: `export ANTHROPIC_API_KEY=sk-ant-...`"
+                    )
                 except Exception as e:
-                    reply = f"⚠️ Could not connect to AI service: {e}\n\nPlease ensure your ANTHROPIC_API_KEY is set."
+                    reply = f"⚠️ Could not reach AI service: {e}"
 
             st.session_state.chat_history.append({"role": "assistant", "content": reply})
             st.rerun()
